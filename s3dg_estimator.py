@@ -1,3 +1,7 @@
+"""
+Example command-line script invocation:
+python s3dg_estimator.py --model_dir ~/fra-gctd-project/Models/ramsey_nj/sg3d-pretrained-kinetics-600-init --pretrained_warm_start --variables_to_warm_start s3dg --checkpoint_path ~/fra-gctd-project/Models/pre-trained/s3dg_kinetics_600_rgb/model.ckpt --tfrecord_dir_path ~/fra-gctd-project/Data_Sets/ramsey_nj --monitor_steps 10 --learning_rate 0.1 --batch_size 2 --num_gpus 1 --variables_to_train logits
+"""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -9,7 +13,6 @@ import numpy as np
 from os import cpu_count, path, putenv
 from vars_to_warm_start import vars_to_warm_start
 from vars_to_train import vars_to_train
-
 
 slim = tf.contrib.slim
 
@@ -32,8 +35,8 @@ parser.add_argument('--channels', default=3, type=int)
 parser.add_argument('--warm_start', action='store_true')
 parser.add_argument('--pretrained_warm_start', action='store_true')
 parser.add_argument('--variables_to_train', default=None)
-parser.add_argument('--variables_to_warm_start', default='mixed_5')
-parser.add_argument('--variables_to_exclude', default='mixed_5')
+parser.add_argument('--variables_to_warm_start', default='s3dg')
+parser.add_argument('--variables_to_exclude', default='s3dg')
 parser.add_argument('--tfrecord_dir_path',
                     default='/media/data_0/fra/gctd/Data_Sets/ramsey_nj_2x')
 parser.add_argument('--checkpoint_path',
