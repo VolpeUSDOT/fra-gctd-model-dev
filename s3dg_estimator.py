@@ -1,6 +1,6 @@
 """
 Example command-line script invocation:
-python s3dg_estimator.py --model_dir ~/fra-gctd-project/Models/ramsey_nj/sg3d-pretrained-kinetics-600-init --pretrained_warm_start --variables_to_warm_start s3dg --checkpoint_path ~/fra-gctd-project/Models/pre-trained/s3dg_kinetics_600_rgb/model.ckpt --tfrecord_dir_path ~/fra-gctd-project/Data_Sets/ramsey_nj --monitor_steps 10 --learning_rate 0.1 --batch_size 2 --num_gpus 1 --variables_to_train logits
+python s3dg_estimator.py --pretrained_warm_start --monitor_steps 10 --learning_rate 0.1 --batch_size 2 --variables_to_train logits --model_dir C:/Users/Public/fra-gctd-project/Models/ramsey_nj/s3dg/pretrained-init
 """
 from __future__ import absolute_import
 from __future__ import division
@@ -27,7 +27,7 @@ parser.add_argument('--optimizer', default='sgd', help='sgd or momentum')
 parser.add_argument('--momentum', default=0.9, type=float)
 parser.add_argument('--dropout_rate', default=0.2, type=float)
 parser.add_argument('--gpu_num', default=0, type=int)
-parser.add_argument('--num_gpus', default=2, type=int)
+parser.add_argument('--num_gpus', default=1, type=int)
 parser.add_argument('--length', default=64, type=int)
 parser.add_argument('--height', default=s3dg.default_image_size, type=int)
 parser.add_argument('--width', default=s3dg.default_image_size, type=int)
@@ -37,14 +37,10 @@ parser.add_argument('--pretrained_warm_start', action='store_true')
 parser.add_argument('--variables_to_train', default=None)
 parser.add_argument('--variables_to_warm_start', default='s3dg')
 parser.add_argument('--variables_to_exclude', default='s3dg')
-parser.add_argument('--tfrecord_dir_path',
-                    default='/media/data_0/fra/gctd/Data_Sets/ramsey_nj_2x')
+parser.add_argument('--tfrecord_dir_path', default='C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj')
 parser.add_argument('--checkpoint_path',
-                    default='/media/data_0/fra/gctd/Models/pre-trained/'
-                            's3dg_kinetics_600_rgb/model.ckpt')
-parser.add_argument('--model_dir',
-                    default='/media/data_0/fra/gctd/Models/ramsey_nj/'
-                            's3dg-pretrained-init')
+                    default='C:/Users/Public/fra-gctd-project/Models/pre-trained/s3dg_kinetics_600_rgb/model.ckpt')
+parser.add_argument('--model_dir', required=True)
 
 def get_variables_to_train(trainable_scopes):
   """Returns a list of variables to train.
@@ -220,16 +216,16 @@ def main(argv):
       allow_growth=True, per_process_gpu_memory_fraction=.95)
     session_config = tf.ConfigProto(
       allow_soft_placement=True, gpu_options=gpu_options)
-    devices = ['/gpu:0']  # virtual gpu names are independent of device names
-    distribute_strategy = tf.contrib.distribute.MirroredStrategy(
-      devices=devices)
+    distribute_strategy = None
     putenv('CUDA_VISIBLE_DEVICES', '{}'.format(args.gpu_num))
   elif args.num_gpus > 1:  # TODO: parameterize list of CUDA_VISIBLE_DEVICE nums
     gpu_options = tf.GPUOptions(
       allow_growth=True, per_process_gpu_memory_fraction=.95)
     session_config = tf.ConfigProto(
       allow_soft_placement=True, gpu_options=gpu_options)
+    # virtual gpu names are independent of device name
     devices = ['/gpu:{}'.format(i) for i in range(args.num_gpus)]
+    # MirroredStrategy not implemented on Windows
     distribute_strategy = tf.contrib.distribute.MirroredStrategy(
       devices=devices)
     device_names = ''
