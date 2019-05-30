@@ -344,11 +344,10 @@ class Player(tk.Frame):
       'ped_undr_nw_ped_gt'
     ]
 
-    self.default_data_source_path = \
-      '/media/data_0/fra/gctd/Data_Sources/ramsey_nj/seed_data_source'
+    self.default_data_source_path = 'C:/Users/Public/fra-gctd-project/Data_Sources/ramsey_nj'
 
     try:
-      ffmpeg_path = os.environ['FFMPEG_HOME']
+      ffmpeg_path = os.environ['FFMPEG_PATH']
     except KeyError:
       ffmpeg_path = '/usr/local/bin/ffmpeg'
 
@@ -362,7 +361,7 @@ class Player(tk.Frame):
       '-hide_banner', '-loglevel', '0', '-f', 'image2pipe', 'pipe:1']
 
     try:
-      ffprobe_path = os.environ['FFPROBE_HOME']
+      ffprobe_path = os.environ['FFPROBE_PATH']
     except KeyError:
       ffprobe_path = '/usr/local/bin/ffprobe'
 
@@ -385,7 +384,7 @@ class Player(tk.Frame):
     # create array of checkboxes
     for k, v in enumerate(self.class_list):
       ttk.Checkbutton(self.labelpanel, text=v, onvalue=1, offvalue=0).grid(
-        column=k % 6, row=int(k / 6), sticky=tk.NW)
+        column=k % 12, row=int(k / 12), sticky=tk.NW)
 
     self.labelpanel.pack(side=tk.BOTTOM)
 
@@ -435,7 +434,7 @@ class Player(tk.Frame):
     # if a file is already running, then stop it.
     self.OnStop()
 
-    # Create a file dialog opened in the current home directory, where
+    # Create a file dialog opened in the current PATH directory, where
     # you can display all kind of files, having as title "Choose a file".
     p = pathlib.Path(self.default_data_source_path)
 
@@ -632,12 +631,12 @@ class Player(tk.Frame):
   def errorDialog(self, errormessage):
     """Display a simple error dialog.
     """
-    tk.tkMessageBox.showerror(self, 'Error', errormessage)
+    tk.TkMessageBox.showerror(self, 'Error', errormessage)
 
 
 def tk_get_root():
   if not hasattr(tk_get_root, "root"):  # (1)
-    tk_get_root.root = tk.tk()  # initialization call is inside the function
+    tk_get_root.root = tk.Tk()  # initialization call is inside the function
   return tk_get_root.root
 
 
