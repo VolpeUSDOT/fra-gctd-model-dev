@@ -1,3 +1,6 @@
+"""
+python extract_video_clips.py -i C:/Users/Public/fra-gctd-project/Raw_Data/ramsey_nj/20180419/Ch02_20180419000000_20180419235959_12.avi -o C:/Users/Public/fra-gctd-project/Data_Sources/ramsey_nj/20180419
+"""
 import argparse as ap
 import logging
 import numpy as np
@@ -7,9 +10,7 @@ from subprocess import PIPE, Popen, TimeoutExpired
 parser = ap.ArgumentParser()
 
 parser.add_argument('--inputvideofilepath', '-i', required=True)
-parser.add_argument('--outputclipdirpath', '-o',
-                    default='/media/data_0/fra/gctd/Data_Sources/ramsey_nj/'
-                            '20180419')
+parser.add_argument('--outputclipdirpath', '-o', default=True)
 parser.add_argument('--highresoutputdirname', '-hn', default='high_res')
 parser.add_argument('--lowresoutputdirname', '-ln', default='low_res')
 parser.add_argument('--cliplength', '-cl', type=int, default=64)
@@ -45,9 +46,9 @@ if not path.isdir(low_res_clip_dir_path):
   makedirs(low_res_clip_dir_path)
 
 try:
-  ffmpeg_path = environ['FFMPEG_HOME']
+  ffmpeg_path = environ['FFMPEG_PATH']
 except KeyError:
-  logging.warning('Environment variable FFMPEG_HOME not set. Attempting '
+  logging.warning('Environment variable FFMPEG_PATH not set. Attempting '
                   'to use default ffmpeg binary location.')
   ffmpeg_path = '/usr/local/bin/ffmpeg'
 
