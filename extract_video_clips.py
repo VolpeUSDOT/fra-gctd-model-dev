@@ -1,5 +1,5 @@
 """
-python extract_video_clips.py -i C:/Users/Public/fra-gctd-project/Raw_Data/ramsey_nj/20180419/Ch02_20180419000000_20180419235959_12.avi -o C:/Users/Public/fra-gctd-project/Data_Sources/ramsey_nj/20180419
+python extract_video_clips.py -i C:/Users/Public/fra-gctd-project/Raw_Data/ramsey_nj/20180419/Ch02_20180419000000_20180419235959_12.avi
 """
 import argparse as ap
 import logging
@@ -10,7 +10,7 @@ from subprocess import PIPE, Popen, TimeoutExpired
 parser = ap.ArgumentParser()
 
 parser.add_argument('--inputvideofilepath', '-i', required=True)
-parser.add_argument('--outputclipdirpath', '-o', default=True)
+parser.add_argument('--outputclipdirpath', '-o', default=None)
 parser.add_argument('--highresoutputdirname', '-hn', default='high_res')
 parser.add_argument('--lowresoutputdirname', '-ln', default='low_res')
 parser.add_argument('--cliplength', '-cl', type=int, default=64)
@@ -33,11 +33,14 @@ args = parser.parse_args()
 
 video_file_name = path.splitext(path.basename(args.inputvideofilepath))[0]
 
-high_res_clip_dir_path = path.join(path.join(
-  args.outputclipdirpath, video_file_name), args.highresoutputdirname)
+if args.outputclipdirpath is None:
+  outputclipdirpath = path.join(path.dirname(args.inputvideofilepath), video_file_name)
+else:
+  outputclipdirpath = path.join(args.outputclipdirpath, video_file_name)
 
-low_res_clip_dir_path = path.join(path.join(
-  args.outputclipdirpath, video_file_name), args.lowresoutputdirname)
+high_res_clip_dir_path = path.join(outputclipdirpath, args.highresoutputdirname)
+
+low_res_clip_dir_path = path.join(outputclipdirpath, args.lowresoutputdirname)
 
 if not path.isdir(high_res_clip_dir_path):
   makedirs(high_res_clip_dir_path)
