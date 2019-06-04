@@ -23,6 +23,7 @@
 Patrick Fay. https://github.com/oaubert/python-vlc/blob/master/examples/tkvlc.py
 """
 
+import argparse as ap
 import json
 import numpy as np
 import os
@@ -33,8 +34,12 @@ from threading import Thread, Event
 import time
 import tkinter as tk
 from tkinter import ttk
-from tkinter.filedialog import askdirectory
+from tkinter.filedialog import askdirectory, askopenfilename
 import vlc
+
+parser = ap.ArgumentParser()
+parser.add_argument('--defaultdatasourcepath', '-d', default='C:/Users/Public/fra-gctd-project/Data_Sources/ramsey_nj')
+args = parser.parse_args()
 
 
 class ttkTimer(Thread):
@@ -79,7 +84,8 @@ class Player(tk.Frame):
     self.parent.config(menu=menubar)
 
     fileMenu = tk.Menu(menubar)
-    fileMenu.add_command(label="Open", underline=0, command=self.OnOpen)
+    fileMenu.add_command(label="Open File", underline=0, command=self.OnOpenFile)
+    fileMenu.add_command(label="Open Directory", underline=0, command=self.OnOpenDirectory)
     fileMenu.add_command(label="Exit", underline=1, command=_quit)
     menubar.add_cascade(label="File", menu=fileMenu)
 
@@ -344,7 +350,7 @@ class Player(tk.Frame):
       'ped_undr_nw_ped_gt'
     ]
 
-    self.default_data_source_path = 'C:/Users/Public/fra-gctd-project/Data_Sources/ramsey_nj'
+    self.default_data_source_path = args.defaultdatasourcepath
 
     try:
       ffmpeg_path = os.environ['FFMPEG_PATH']
@@ -428,7 +434,34 @@ class Player(tk.Frame):
     """
     self.Close()
 
-  def OnOpen(self):
+  def OnOpenFile(self):
+    """Pop up a new dialow window to choose a file, then play the selected file.
+    """
+    # if a file is already running, then stop it.
+    self.OnStop()
+
+    # Create a file dialog opened in the current PATH directory, where
+    # you can display all kind of files, having as title "Choose a file".
+    p = pathlib.Path(self.default_data_source_path)
+
+    video_file_path = askopenfilename(
+      initialdir=p, title="Choose a video clip", filetypes=(
+        ("all files", "*.*"), ("mp4 files", "*.mp4"), ("avi files", "*.avi")))
+
+    if os.path.isfile(video_file_path):
+      self.directory_path = os.path.dirname(video_file_path)
+      video_file_name = os.path.basename(video_file_path)
+
+      self.directory_child_filenames = sorted(
+        os.listdir(self.directory_path))
+
+      self.num_clips = len(self.directory_child_filenames)
+
+      self.current_clip = self.directory_child_filenames.index(video_file_name)
+
+      self.DisplayClip()
+
+  def OnOpenDirectory(self):
     """Pop up a new dialow window to choose a file, then play the selected file.
     """
     # if a file is already running, then stop it.
@@ -476,7 +509,7 @@ class Player(tk.Frame):
     # check if there is a file to play, otherwise open a
     # tk.FileDialog to select a file
     if not self.player.get_media():
-      self.OnOpen()
+      self.OnOpenDirectory()
     else:
       # set the checkbutton state values equal to those in the label associated
       # with the currently visible video.
@@ -501,7 +534,7 @@ class Player(tk.Frame):
     # check if there is a file to play, otherwise open a
     # tk.FileDialog to select a file
     if not self.player.get_media():
-      self.OnOpen()
+      self.OnOpenDirectory()
     else:
       # save the selected labels, then advance the clip
       label_array = np.array(
@@ -524,7 +557,7 @@ class Player(tk.Frame):
     # check if there is a file to play, otherwise open a
     # tk.FileDialog to select a file
     if not self.player.get_media():
-      self.OnOpen()
+      self.OnOpenDirectory()
     else:
       if self.current_clip < self.num_clips - 1:
         self.current_clip += 1
@@ -538,7 +571,7 @@ class Player(tk.Frame):
     # check if there is a file to play, otherwise open a
     # tk.FileDialog to select a file
     if not self.player.get_media():
-      self.OnOpen()
+      self.OnOpenDirectory()
     else:
       if self.current_clip > 0:
         self.current_clip -= 1
@@ -552,7 +585,7 @@ class Player(tk.Frame):
     # check if there is a file to play, otherwise open a
     # tk.FileDialog to select a file
     if not self.player.get_media():
-      self.OnOpen()
+      self.OnOpenDirectory()
     else:
       # Try to launch the media, if this fails display an error message
       if self.player.play() == -1:
