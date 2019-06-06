@@ -38,12 +38,16 @@ from tkinter.filedialog import askdirectory, askopenfilename
 import vlc
 
 parser = ap.ArgumentParser()
-parser.add_argument('--defaultdatasourcepath', '-d', default='C:/Users/Public/fra-gctd-project/Data_Sources/ramsey_nj')
+parser.add_argument('--defaultdatasourcepath', '-d',
+                    default='C:/Users/Public/fra-gctd-project/Data_Sources/'
+                            'ramsey_nj')
+parser.add_argument('--subsamplerate', '-s', type=int, default=2)
 args = parser.parse_args()
 
 
 class ttkTimer(Thread):
-  """a class serving same function as wxTimer... but there may be better ways to do this
+  """a class serving same function as wxTimer...
+  but there may be better ways to do this
   """
 
   def __init__(self, callback, tick):
@@ -84,8 +88,10 @@ class Player(tk.Frame):
     self.parent.config(menu=menubar)
 
     fileMenu = tk.Menu(menubar)
-    fileMenu.add_command(label="Open File", underline=0, command=self.OnOpenFile)
-    fileMenu.add_command(label="Open Directory", underline=0, command=self.OnOpenDirectory)
+    fileMenu.add_command(
+      label="Open File", underline=0, command=self.OnOpenFile)
+    fileMenu.add_command(
+      label="Open Directory", underline=0, command=self.OnOpenDirectory)
     fileMenu.add_command(label="Exit", underline=1, command=_quit)
     menubar.add_cascade(label="File", menu=fileMenu)
 
@@ -351,6 +357,7 @@ class Player(tk.Frame):
     ]
 
     self.default_data_source_path = args.defaultdatasourcepath
+    self.subsamplerate = args.subsamplerate
 
     try:
       ffmpeg_path = os.environ['FFMPEG_PATH']
@@ -458,6 +465,11 @@ class Player(tk.Frame):
 
       self.current_clip = self.directory_child_filenames.index(video_file_name)
 
+      # the number of consecutive clips sharing a common label is equal to the
+      # subsample rate. if the user selects a clip other than the first in the
+      # label-sharing set, adjust the current clip
+      self.current_clip -= self.current_clip % self.subsamplerate
+
       self.DisplayClip()
 
   def OnOpenDirectory(self):
@@ -542,9 +554,13 @@ class Player(tk.Frame):
       save_path = os.path.join(os.path.dirname(self.directory_path), 'labels')
       if not os.path.exists(save_path):
         os.makedirs(save_path)
-      np.save(os.path.join(save_path, os.path.splitext(
-        self.directory_child_filenames[self.current_clip])[0] + '.npy'),
-              label_array)
+
+      # save one file for each consecutive clip sharing a common label
+      for current_clip in range(
+          self.current_clip, self.current_clip + self.subsamplerate):
+        np.save(os.path.join(save_path, os.path.splitext(
+          self.directory_child_filenames[current_clip])[0] + '.npy'),
+                label_array)
 
       self.OnNext()
 
@@ -558,7 +574,7 @@ class Player(tk.Frame):
       self.OnOpenDirectory()
     else:
       if self.current_clip < self.num_clips - 1:
-        self.current_clip += 1
+        self.current_clip += self.subsamplerate
       self.DisplayClip()
       self.OnPlay()
 
@@ -572,7 +588,7 @@ class Player(tk.Frame):
       self.OnOpenDirectory()
     else:
       if self.current_clip > 0:
-        self.current_clip -= 1
+        self.current_clip -= self.subsamplerate
       self.DisplayClip()
       self.OnPlay()
 

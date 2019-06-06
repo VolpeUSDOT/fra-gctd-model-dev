@@ -1,14 +1,31 @@
+import argparse
 import json
 import numpy as np
 import os
 from subprocess import PIPE, run
 import tensorflow as tf
 
-dataset_path = '/media/data_0/fra/gctd/Data_Sources/ramsey_nj/seed_data_source' \
-               '/Ch02_20180419000000_20180419235959_11_2x'
+"""
+python construct_dataset.py --data_source_dir_path /media/data_0/fra/gctd/Data_Sources/ramsey_nj/seed_data_source --data_set_dir_path /media/data_0/fra/gctd/Data_Sets/ramsey_nj/seed_data_set
+"""
+parser = argparse.ArgumentParser()
+
+parser.add_argument('--data_source_dir_path', required=True)
+parser.add_argument('--data_set_dir_path', required=True)
+parser.add_argument('--batch_size', default=6, type=int)
+
+args = parser.parse_args()
+
+if not os.path.exists(args.data_source_dir_path):
+  raise ValueError("data_source_dir_path: {} doe not exist.".format(args.data_source_dir_path))
+
+if not os.path.exists(args.data_set_dir_path):
+  os.makedirs(args.data_set_dir_path)
+
+num_samples = len(os.listdir(os.path.join(args.data_source_dir_path, 'labels')))
 
 try:
-  ffmpeg_path = os.environ['FFMPEG_HOME']
+  ffmpeg_path = os.environ['FFMPEG_PATH']
 except KeyError:
   ffmpeg_path = '/usr/local/bin/ffmpeg'
 
@@ -22,7 +39,7 @@ ffmpeg_command_suffix = [
   '-hide_banner', '-loglevel', '0', '-f', 'image2pipe', 'pipe:1']
 
 try:
-  ffprobe_path = os.environ['FFPROBE_HOME']
+  ffprobe_path = os.environ['FFPROBE_PATH']
 except KeyError:
   ffprobe_path = '/usr/local/bin/ffprobe'
 
@@ -56,10 +73,10 @@ def get_video_clip(video_file_path):
   return output
 
 def gen_fn():
-  features_dir_path = os.path.join(dataset_path, 'low_res')
+  features_dir_path = os.path.join(args.data_source_dir_path, 'low_res')
   feature_file_paths = [os.path.join(features_dir_path, file_name)
                         for file_name in os.listdir(features_dir_path)]
-  labels_dir_path = os.path.join(dataset_path, 'labels')
+  labels_dir_path = os.path.join(args.data_source_dir_path, 'labels')
 
   for feature_file_path in feature_file_paths:
     feature_string = get_video_clip(feature_file_path)
@@ -81,9 +98,23 @@ def gen_fn():
 dataset = tf.data.Dataset.from_generator(
   gen_fn, output_types=tf.string, output_shapes=[])
 
-filename = '/media/data_0/fra/gctd/Data_Sets/test_2x.tfrecord'
-writer = tf.data.experimental.TFRecordWriter(filename)
-write_dataset = writer.write(dataset)
+dataset = dataset.shuffle(num_samples).batch(args.batch_size)
+
+initializer = dataset.make_one_shot_iterator()
+
+next_batch = initializer.get_next()
+
+batch_num = 0
 
 with tf.Session().as_default() as sess:
-  sess.run(write_dataset)
+  while True:
+    try:
+      example = sess.run(next_batch)
+      example = tf.data.Dataset.from_tensor_slices(example)
+      filename = os.path.join(args.data_set_dir_path, '{:07d}.tfrecord'.format(batch_num))
+      writer = tf.data.experimental.TFRecordWriter(filename)
+      write_dataset = writer.write(example)
+      sess.run(write_dataset)
+      batch_num += 1
+    except tf.errors.OutOfRangeError:
+      break
