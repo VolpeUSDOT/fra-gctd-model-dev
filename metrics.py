@@ -2,31 +2,18 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
-
 from tensorflow.python.eager import context
+from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
+from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import variable_scope
-from tensorflow.python.util.tf_export import tf_export
 from tensorflow.python.ops.metrics import precision, recall
-
-def safe_divide(numerator, denominator):
-  """Divides two values, returning 0 if the denominator is <= 0.
-  Copied from the metric_ops.py protected member function.
-
-  Args:
-    numerator: A real `Tensor`.
-    denominator: A real `Tensor`, with dtype matching `numerator`.
-    name: Name for the returned op.
-
-  Returns:
-    0 if `denominator` <= 0, else `numerator` / `denominator`
-  """
-  return tf.where(
-    tf.greater(denominator, 0), tf.truediv(numerator, denominator), 0)
+from tensorflow.python.ops.metrics_impl import _aggregate_across_replicas
+from tensorflow.python.ops.metrics_impl import _remove_squeezable_dimensions
+from tensorflow.python.ops.metrics_impl import _safe_scalar_div
 
 
-@tf_export('metrics.f1')
+# inspired by tensorflow.python.ops.metrics_impl.precision
 def f1(labels,
        predictions,
        weights=None,
@@ -39,23 +26,29 @@ def f1(labels,
 
   with variable_scope.variable_scope(
       name, 'f1', (predictions, labels, weights)):
+    predictions, labels, weights = _remove_squeezable_dimensions(
+      predictions=math_ops.cast(predictions, dtype=dtypes.bool),
+      labels=math_ops.cast(labels, dtype=dtypes.bool), weights=weights)
+
     prec, precision_update_op = precision(
-      labels, predictions, weights=weights, metrics_collections=None,
+      labels, predictions, weights, metrics_collections=None,
       updates_collections=None, name=None)
+
     rec, recall_update_op = recall(
-      labels, predictions, weights=weights, metrics_collections=None,
+      labels, predictions, weights, metrics_collections=None,
       updates_collections=None, name=None)
 
     def compute_f1(p, r, name):
-      return tf.multiply(
-        2., safe_divide(tf.multiply(p, r), tf.add(tf.multiply(1., p), r)), 
-        name=name)
+      return math_ops.multiply(2., _safe_scalar_div(math_ops.multiply(
+        p, r), math_ops.add(math_ops.multiply(1., p), r), 'f1'), name)
 
-    value = compute_f1(prec, rec, 'value')
+    def once_across_replicas(_, true_p, false_p):
+      return compute_f1(true_p, false_p, 'value')
+
+    value = _aggregate_across_replicas(
+      metrics_collections, once_across_replicas, prec, rec)
+
     update_op = compute_f1(precision_update_op, recall_update_op, 'update_op')
-
-    if metrics_collections:
-      ops.add_to_collections(metrics_collections, value)
 
     if updates_collections:
       ops.add_to_collections(updates_collections, update_op)
