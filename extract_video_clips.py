@@ -1,10 +1,11 @@
 """
 python extract_video_clips.py -i C:/Users/Public/fra-gctd-project/Raw_Data/ramsey_nj/20180419/Ch02_20180419000000_20180419235959_12.avi
+python extract_video_clips.py -i /media/data_0/fra/gctd/Raw_Data/ramsey_nj/20180419/Ch02_20180419000000_20180419235959_12.avi
 """
 import argparse as ap
 import logging
 import numpy as np
-from os import environ, path, makedirs
+from os import environ, path, makedirs, listdir, remove
 from subprocess import PIPE, Popen, TimeoutExpired
 
 parser = ap.ArgumentParser()
@@ -30,6 +31,10 @@ parser.add_argument('--scaleheight', '-sh', type=int, default=224)
 parser.add_argument('--scalewidth', '-sw', type=int, default=224)
 
 args = parser.parse_args()
+
+if not path.exists(args.inputvideofilepath):
+  raise ValueError(
+    'inputvideofilepath: {} does not exist'.format(args.inputvideofilepath))
 
 video_file_name = path.splitext(path.basename(args.inputvideofilepath))[0]
 
@@ -104,6 +109,12 @@ low_res_output_ffmpeg_command_prefix = [
 
 clip_number = 0
 
+high_res_clip_dir_files = listdir(high_res_clip_dir_path)
+high_res_clip_dir_file_count = len(high_res_clip_dir_files)
+
+low_res_clip_dir_files = listdir(low_res_clip_dir_path)
+low_res_clip_dir_file_count = len(low_res_clip_dir_files)
+
 while True:
   frame_string = frame_pipe.stdout.read(clip_string_len * 2)
   print('frame_string_len: {}'.format(len(frame_string)))
@@ -123,15 +134,13 @@ while True:
   print('frame_array_shape: {}'.format(frame_array.shape))
 
   frame_array = np.reshape(
-    frame_array, 
-    [-1, args.cropheight, args.cropwidth, args.numchannels])
+    frame_array, [-1, args.cropheight, args.cropwidth, args.numchannels])
   print('frame_array_shape: {}'.format(frame_array.shape))
-  
+
   # if the last clip is short, repeat the last frame
   if frame_array.shape[0] < args.cliplength * 2:
     frame_array = np.concatenate((frame_array, np.tile(
-      frame_array[-1], 
-      (args.cliplength * 2 - frame_array.shape[0], 1, 1, 1))))
+      frame_array[-1], (args.cliplength * 2 - frame_array.shape[0], 1, 1, 1))))
     print('frame_array_shape: {}'.format(frame_array.shape))
 
   # write frame_array to new video clip
@@ -151,10 +160,17 @@ while True:
       # write intermediate_frame_array to new video clip
       intermediate_frame_string = array.tostring()
 
-      high_res_output_ffmpeg_command = \
-        high_res_output_ffmpeg_command_prefix + [
-        path.join(high_res_clip_dir_path, '{}_{:07d}.avi'.format(
-          video_file_name, clip_number))]
+      high_res_clip_file_name = '{}_{:07d}.avi'.format(video_file_name,
+                                                       clip_number)
+
+      high_res_clip_file_path = path.join(high_res_clip_dir_path,
+                                          high_res_clip_file_name)
+
+      if high_res_clip_dir_file_count and high_res_clip_file_name in high_res_clip_dir_files:
+        remove(high_res_clip_file_path)
+
+      high_res_output_ffmpeg_command = high_res_output_ffmpeg_command_prefix + [
+        high_res_clip_file_path]
 
       high_res_output_frame_pipe = Popen(
         high_res_output_ffmpeg_command, stdin=PIPE, stderr=PIPE,
@@ -169,9 +185,17 @@ while True:
         high_res_output_frame_pipe.kill()
         print('killed intermediate_output_frame_pipe')
 
+      low_res_clip_file_name = '{}_{:07d}.avi'.format(video_file_name,
+                                                       clip_number)
+
+      low_res_clip_file_path = path.join(low_res_clip_dir_path,
+                                          low_res_clip_file_name)
+
+      if low_res_clip_dir_file_count and low_res_clip_file_name in low_res_clip_dir_files:
+        remove(low_res_clip_file_path)
+
       low_res_output_ffmpeg_command = low_res_output_ffmpeg_command_prefix + [
-        path.join(low_res_clip_dir_path, '{}_{:07d}.avi'.format(
-          video_file_name, clip_number))]
+        low_res_clip_file_path]
 
       low_res_output_frame_pipe = Popen(
         low_res_output_ffmpeg_command, stdin=PIPE, stderr=PIPE,
@@ -201,9 +225,15 @@ while True:
     frame_string = array.tostring()
     print('string_len: {}'.format(len(frame_string)))
 
+    high_res_clip_file_name = '{}_{:07d}.avi'.format(video_file_name, clip_number)
+
+    high_res_clip_file_path = path.join(high_res_clip_dir_path, high_res_clip_file_name)
+
+    if high_res_clip_dir_file_count and high_res_clip_file_name in high_res_clip_dir_files:
+      remove(high_res_clip_file_path)
+
     high_res_output_ffmpeg_command = high_res_output_ffmpeg_command_prefix + [
-      path.join(high_res_clip_dir_path, '{}_{:07d}.avi'.format(
-        video_file_name, clip_number))]
+      high_res_clip_file_path]
 
     high_res_output_frame_pipe = Popen(
       high_res_output_ffmpeg_command, stdin=PIPE, stderr=PIPE,
@@ -218,9 +248,17 @@ while True:
       high_res_output_frame_pipe.kill()
       print('killed output_frame_pipe')
 
+    low_res_clip_file_name = '{}_{:07d}.avi'.format(video_file_name,
+                                                    clip_number)
+
+    low_res_clip_file_path = path.join(low_res_clip_dir_path,
+                                       low_res_clip_file_name)
+
+    if low_res_clip_dir_file_count and low_res_clip_file_name in low_res_clip_dir_files:
+      remove(low_res_clip_file_path)
+
     low_res_output_ffmpeg_command = low_res_output_ffmpeg_command_prefix + [
-      path.join(low_res_clip_dir_path, '{}_{:07d}.avi'.format(
-        video_file_name, clip_number))]
+      low_res_clip_file_path]
 
     low_res_output_frame_pipe = Popen(
       low_res_output_ffmpeg_command, stdin=PIPE, stderr=PIPE,
