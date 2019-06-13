@@ -13,6 +13,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--data_source_dir_path', required=True)
 parser.add_argument('--data_set_dir_path', required=True)
 parser.add_argument('--batch_size', default=6, type=int)
+parser.add_argument('--clip_length', default=64, type=int)
 
 args = parser.parse_args()
 
@@ -51,7 +52,7 @@ input_ffprobe_command_prefix = [ffprobe_path, '-show_streams', '-print_format',
 
 scale_height, scale_width = 224, 224
 
-clip_string_len = 64 * scale_height * scale_width * 3
+clip_string_len = args.clip_length * scale_height * scale_width * 3
 
 def invoke_subprocess(command):
   completed_subprocess = run(command, stdout=PIPE, stderr=PIPE, timeout=60)
