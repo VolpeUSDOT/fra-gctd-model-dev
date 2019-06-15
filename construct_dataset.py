@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--data_source_dir_path', required=True)
 parser.add_argument('--data_set_dir_path', required=True)
-parser.add_argument('--batch_size', default=6, type=int)
+parser.add_argument('--batch_size', default=4, type=int)
 parser.add_argument('--clip_length', default=64, type=int)
 
 args = parser.parse_args()
@@ -105,17 +105,22 @@ initializer = dataset.make_one_shot_iterator()
 
 next_batch = initializer.get_next()
 
+example = tf.data.Dataset.from_tensor_slices(next_batch)
+
+file_name = tf.placeholder(dtype=tf.string)
+
+writer = tf.data.experimental.TFRecordWriter(file_name)
+
+write_dataset = writer.write(example)
+
 batch_num = 0
 
 with tf.Session().as_default() as sess:
   while True:
     try:
-      example = sess.run(next_batch)
-      example = tf.data.Dataset.from_tensor_slices(example)
-      filename = os.path.join(args.data_set_dir_path, '{:07d}.tfrecord'.format(batch_num))
-      writer = tf.data.experimental.TFRecordWriter(filename)
-      write_dataset = writer.write(example)
-      sess.run(write_dataset)
+      filename = os.path.join(args.data_set_dir_path, '{:07d}.tfrecord'.format(
+        batch_num))
+      sess.run(write_dataset, feed_dict={file_name: filename})
       batch_num += 1
     except tf.errors.OutOfRangeError:
       break
