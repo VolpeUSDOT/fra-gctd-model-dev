@@ -10,7 +10,7 @@ We consider two model architectures for activity recognition, i3d and its deriva
 
 2. Model Training and Evaluation
 
-The script i3d_estimator.py can be used to train, evaluate and make predictions using i3d models, as well as to export models to the (new) SaveModel format. Training and evaluation can be performed jointly or separately.
+The script s3dg_estimator.py can be used to train, evaluate and make predictions using s3dg models, as well as to export models to the (new) SaveModel format. Training and evaluation can be performed jointly or separately.
 
 The training and evaluation procedure presented in the guide proceeds in (up to) three phases:
 
@@ -22,16 +22,16 @@ The training and evaluation procedure presented in the guide proceeds in (up to)
 
 During each phase, the tensorboard application can be used to monitor training using graphical visualizations of metric scalar values and per-layer parameter distributions.
 
-Below are examples of three different invocations of i3d_estimator.py that perform the three tasks described above:
+Below are examples of three different invocations of s3dg_estimator.py that perform the three tasks described above:
 
-	1) python i3d_estimator.py --mode train_and_eval --model_dir C:/Users/Public/fra-gctd-project/Models/ramsey_nj/i3d-estimator-pretrained-init --checkpoint_path C:/Users/Public/fra-gctd-project/Models/pre-trained/i3d_kinetics_600_rgb/model.ckpt --train_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180419 --eval_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180420 --monitor_steps 532 --learning_rate 0.1 --batch_size 2 --variables_to_warm_start i3d_convs --variables_to_train i3d_logits
+	1) python s3dg_estimator.py --mode train_and_eval --model_dir C:/Users/Public/fra-gctd-project/Models/ramsey_nj/s3dg-estimator-pretrained-init --checkpoint_path C:/Users/Public/fra-gctd-project/Models/pre-trained/s3dg_kinetics_600_rgb/model.ckpt --train_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180419 --eval_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180420 --monitor_steps 532 --learning_rate 0.1 --batch_size 2 --variables_to_warm_start s3dg_convs --variables_to_train s3dg_logits
 
 	*Note that the monitor_steps parameter, which governs when training metrics are logged to the console and to disk, is half of the number of training exampes because the batch size is 2, meaning two examples are processed per step. The choice to evaluate the model once per epoch is arbitrary. Evaluation can occur more frequently, but keep in mind that while evaluation is taking place training is stopped (so that the evaluator can use the same compute resources).
 
-	2) python i3d_estimator.py --mode train_and_eval --model_dir C:/Users/Public/fra-gctd-project/Models/ramsey_nj/i3d-estimator-coarsetuned-init --checkpoint_path C:/Users/Public/fra-gctd-project/Models/ramsey_nj/i3d-estimator-pretrained-init --train_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180419 --eval_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180420 --monitor_steps 1064 --learning_rate 0.001 --batch_size 1
+	2) python s3dg_estimator.py --mode train_and_eval --model_dir C:/Users/Public/fra-gctd-project/Models/ramsey_nj/s3dg-estimator-coarsetuned-init --checkpoint_path C:/Users/Public/fra-gctd-project/Models/ramsey_nj/s3dg-estimator-pretrained-init --train_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180419 --eval_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180420 --monitor_steps 1064 --learning_rate 0.001 --batch_size 1
 
 	*Note that we do not need to explicitly specify variables_to_warm_start nor variables_to_train. We also reduced the batch size because performing backpropagation over the entire network rather than just the logits layer consumes significantly more GPU memory, leaving less space to store training examples. The monitor_steps value is reduced accordingly.
 
-	3) python i3d_estimator.py --mode train_and_eval --model_dir C:/Users/Public/fra-gctd-project/Models/ramsey_nj/i3d-estimator-finetuned-init --checkpoint_path C:/Users/Public/fra-gctd-project/Models/ramsey_nj/i3d-estimator-coarsetuned-init --train_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180419 --eval_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180420 --monitor_steps 1064 --learning_rate 0.00001 --batch_size 1
+	3) python s3dg_estimator.py --mode train_and_eval --model_dir C:/Users/Public/fra-gctd-project/Models/ramsey_nj/s3dg-estimator-finetuned-init --checkpoint_path C:/Users/Public/fra-gctd-project/Models/ramsey_nj/s3dg-estimator-coarsetuned-init --train_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180419 --eval_subset_dir_path C:/Users/Public/fra-gctd-project/Data_Sets/ramsey_nj/20180420 --monitor_steps 1064 --learning_rate 0.00001 --batch_size 1
 
-Tensorboard can be run using the following command: tensorboard --logdir C:/Users/Public/fra-gctd-project/Models/ramsey_nj. A URL hsould be printed to teh console that can be navigated to using a web browser.
+Tensorboard can be run using the following command: tensorboard --logdir C:/Users/Public/fra-gctd-project/Models/ramsey_nj. A URL should be printed to the console that can be navigated to using a web browser.
