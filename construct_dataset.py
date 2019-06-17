@@ -13,17 +13,17 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--data_source_dir_path', required=True)
 parser.add_argument('--data_set_dir_path', required=True)
 parser.add_argument('--batch_size', default=4, type=int)
+parser.add_argument('--buffer_size', default=1024, type=int)
 parser.add_argument('--clip_length', default=64, type=int)
 
 args = parser.parse_args()
 
 if not os.path.exists(args.data_source_dir_path):
-  raise ValueError("data_source_dir_path: {} doe not exist.".format(args.data_source_dir_path))
+  raise ValueError(
+    "data_source_dir_path: {} doe not exist.".format(args.data_source_dir_path))
 
 if not os.path.exists(args.data_set_dir_path):
   os.makedirs(args.data_set_dir_path)
-
-num_samples = len(os.listdir(os.path.join(args.data_source_dir_path, 'labels')))
 
 try:
   ffmpeg_path = os.environ['FFMPEG_PATH']
@@ -99,7 +99,7 @@ def gen_fn():
 dataset = tf.data.Dataset.from_generator(
   gen_fn, output_types=tf.string, output_shapes=[])
 
-dataset = dataset.shuffle(num_samples).batch(args.batch_size)
+dataset = dataset.shuffle(buffer_size=args.buffer_size).batch(args.batch_size)
 
 initializer = dataset.make_one_shot_iterator()
 
