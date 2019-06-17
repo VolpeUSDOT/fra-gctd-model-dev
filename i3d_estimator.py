@@ -222,8 +222,6 @@ def main(argv):
   def get_test_dataset():
     pass
 
-
-
   # prepare to use zero or more GPUs
   if args.num_gpus == 1:
     gpu_options = tf.GPUOptions(
