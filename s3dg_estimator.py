@@ -1,13 +1,3 @@
-"""
-Example command-line script invocation:
-python s3dg_estimator.py --model_dir C:/Users/Public/fra-gctd-project/Models/ramsey_nj/s3dg/pretrained-init --pretrained_warm_start --monitor_steps 10 --learning_rate 0.1 --batch_size 2 --variables_to_train logits
-
-COARSE_TUNE
-python s3dg_estimator.py --mode train --model_dir /media/data_0/fra/gctd/Models/ramsey_nj/s3dg-estimator-pretrained-init --checkpoint_path /media/data_0/fra/gctd/Models/pre-trained/s3dg_kinetics_600_rgb/model.ckpt --tfrecord_dir_path /media/data_0/fra/gctd/Data_Sets/ramsey_nj/seed_data_set_128 --num_gpus 2 --pretrained_warm_start --monitor_steps 50 --learning_rate 0.1 --batch_size 6 --variables_to_train logits
-
-FINE_TUNE
-python s3dg_estimator.py --mode train --model_dir /media/data_0/fra/gctd/Models/ramsey_nj/s3dg-estimator-pretrained-init-seed_data_set_128 --tfrecord_dir_path /media/data_0/fra/gctd/Data_Sets/ramsey_nj/seed_data_set_128 --num_gpus 2 --monitor_steps 50 --learning_rate 0.00001 --batch_size 6
-"""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -18,6 +8,8 @@ from nets.s3dg import *
 import numpy as np
 from os import cpu_count, path, putenv
 from s3dg_vars import s3dg_vars
+from preprocessing.s3dg_preprocessing import preprocess_video
+from metric_weights import metric_weights
 
 slim = tf.contrib.slim
 
@@ -55,14 +47,10 @@ def s3dg_fn(features, labels, mode, params):
       features,
       num_classes=params['num_classes'],
       dropout_keep_prob=1. - params['dropout_rate'],
-      is_training=True if mode == tf.estimator.ModeKeys.TRAIN else False,
-      prediction_fn=scoped_sigmoid)
-
-  # Add summaries for end_points.
-  for endpoint in endpoints:
-    x = endpoints[endpoint]
-    tf.summary.histogram('activations/' + endpoint, x)
-    tf.summary.scalar('sparsity/' + endpoint, tf.nn.zero_fraction(x))
+      is_training=mode == tf.estimator.ModeKeys.TRAIN,
+      prediction_fn=scoped_sigmoid,
+      min_depth=params['min_depth'],
+      depth_multiplier=params['depth_multiplier'])
 
   # Compute predictions using round instead of argmax since our prediction
   # function is sigmoid (for multi-label classification) and not softmax
@@ -105,15 +93,16 @@ def s3dg_fn(features, labels, mode, params):
 
   # Compute evaluation metrics.
   auc = tf.metrics.auc(
-    labels=labels, predictions=predicted_classes, name='auc_op')
+    labels=labels, predictions=predicted_classes, name='auc_op', weights=params['metric_weights'])
 
   precision = tf.metrics.precision(
-    labels=labels, predictions=predicted_classes, name='precision_op')
+    labels=labels, predictions=predicted_classes, name='precision_op', weights=params['metric_weights'])
 
   recall = tf.metrics.recall(
-    labels=labels, predictions=predicted_classes, name='recall_op')
+    labels=labels, predictions=predicted_classes, name='recall_op', weights=params['metric_weights'])
 
-  f1 = f1_metric(labels=labels, predictions=predicted_classes, name='f1_op')
+  f1 = f1_metric(labels=labels, predictions=predicted_classes, name='f1_op',
+                 weights=params['metric_weights'])
 
   if mode == tf.estimator.ModeKeys.EVAL:
     metrics = {
@@ -128,6 +117,17 @@ def s3dg_fn(features, labels, mode, params):
 
   # Create training op.
   assert mode == tf.estimator.ModeKeys.TRAIN
+
+  if params['add_image_summaries']:
+    for batch_num in range(params['batch_size']):
+      tf.summary.image('processed_video_frame', tf.expand_dims(
+        features[batch_num, int(params['clip_length'] / 2)], 0))
+
+  # Add summaries for end_points.
+  for endpoint in endpoints:
+    x = endpoints[endpoint]
+    tf.summary.histogram('activations/' + endpoint, x)
+    tf.summary.scalar('sparsity/' + endpoint, tf.nn.zero_fraction(x))
 
   # Add summaries if we are training only and not evaluating
   # If evaluating, the estimator spec will add summaries automatically
@@ -177,17 +177,15 @@ def main(argv):
   args = parser.parse_args(argv[1:])
 
   # prepare to ingest the data set
-  def preprocess_example(feature, label):
-    feature = tf.decode_raw(feature, tf.uint8)
-    feature = tf.reshape(feature, [args.clip_length, args.frame_height,
-                                   args.frame_width, args.channels])
-    feature = tf.image.convert_image_dtype(feature, dtype=tf.float32)
-    feature = tf.subtract(feature, 0.5)
-    feature = tf.multiply(feature, 2.0)
-    label = tf.decode_raw(label, tf.uint8)
-    label = tf.reshape(label, [args.num_classes, ])
-    label = tf.cast(label, tf.float32)
-    return feature, label
+  def preprocess_for_eval(feature, label):
+    return preprocess_video(
+      feature, label, args.num_classes, args.clip_length, args.frame_height,
+      args.frame_width, args.channels)
+
+  def preprocess_for_train(feature, label):
+    return preprocess_video(
+      feature, label, args.num_classes, args.clip_length, args.frame_height,
+      args.frame_width, args.channels, is_training=True)
 
   def get_train_dataset():
     dataset = tf.data.Dataset.list_files(
@@ -200,7 +198,7 @@ def main(argv):
     dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(
       buffer_size=args.batch_size))
     dataset = dataset.apply(tf.data.experimental.map_and_batch(
-      map_func=preprocess_example, batch_size=args.batch_size,
+      map_func=preprocess_for_train, batch_size=args.batch_size,
       num_parallel_calls=cpu_count()))
     dataset = dataset.prefetch(args.prefetch_size)
     return dataset
@@ -214,15 +212,24 @@ def main(argv):
     dataset = dataset.map(parse_serialized_example,
                           num_parallel_calls=cpu_count())
     dataset = dataset.apply(tf.data.experimental.map_and_batch(
-      map_func=preprocess_example, batch_size=args.batch_size,
+      map_func=preprocess_for_eval, batch_size=args.batch_size,
       num_parallel_calls=cpu_count()))
     dataset = dataset.prefetch(args.prefetch_size)
     return dataset
 
-  def get_test_dataset():
-    pass
-
-
+  def get_predict_dataset():
+    dataset = tf.data.Dataset.list_files(
+      path.join(args.predict_subset_dir_path, '*.tfrecord'))
+    dataset = tf.data.TFRecordDataset(dataset,
+                                      buffer_size=args.tfrecord_size * 2 ** 20,
+                                      num_parallel_reads=cpu_count())
+    dataset = dataset.map(parse_serialized_example,
+                          num_parallel_calls=cpu_count())
+    dataset = dataset.apply(tf.data.experimental.map_and_batch(
+      map_func=preprocess_for_eval, batch_size=args.batch_size,
+      num_parallel_calls=cpu_count()))
+    dataset = dataset.prefetch(args.prefetch_size)
+    return dataset
 
   # prepare to use zero or more GPUs
   if args.num_gpus == 1:
@@ -237,11 +244,17 @@ def main(argv):
       allow_growth=True, per_process_gpu_memory_fraction=.95)
     session_config = tf.ConfigProto(
       allow_soft_placement=True, gpu_options=gpu_options)
-    # virtual gpu names are independent of device name
-    devices = ['/gpu:{}'.format(i) for i in range(args.num_gpus)]
-    # MirroredStrategy dependency NCCL not implemented on Windows
-    distribute_strategy = tf.distribute.MirroredStrategy(devices=devices)
 
+    # we prefer ParameterServerStrategy, but use MirroredStrategy when warm
+    # starting because ParameterServerStrategy is broken in that use case
+    if args.warm_start:
+      # virtual gpu names are independent of device name
+      devices = ['/gpu:{}'.format(i) for i in range(args.num_gpus)]
+      # MirroredStrategy dependency NCCL not implemented on Windows
+      distribute_strategy = tf.distribute.MirroredStrategy(devices=devices)
+    else:
+      distribute_strategy = tf.contrib.distribute.ParameterServerStrategy(
+        num_gpus_per_worker=args.num_gpus)
     # TODO: parameterize list of CUDA_VISIBLE_DEVICE numbers
     device_names = ''
     for i in range(args.num_gpus - 1):
@@ -266,23 +279,31 @@ def main(argv):
     train_distribute=distribute_strategy,
     eval_distribute=distribute_strategy)
 
-  # prepare to restore weights from an existing checkpoint
-  try:
-    variables_to_warm_start = s3dg_vars[args.variables_to_warm_start]
-  except KeyError:
-    variables_to_warm_start = '.*'
+  if args.warm_start:
+    # prepare to restore weights from an existing checkpoint
+    try:
+      variables_to_warm_start = s3dg_vars[args.variables_to_warm_start]
+    except KeyError:
+      variables_to_warm_start = '.*'
 
-  initialization_ckpt = args.checkpoint_path if args.checkpoint_path \
-    else args.model_dir
+    initialization_ckpt = args.checkpoint_path if args.checkpoint_path \
+      else args.model_dir
 
-  warm_start_settings = tf.estimator.WarmStartSettings(
-    ckpt_to_initialize_from=initialization_ckpt,
-    vars_to_warm_start=variables_to_warm_start)
+    warm_start_settings = tf.estimator.WarmStartSettings(
+      ckpt_to_initialize_from=initialization_ckpt,
+      vars_to_warm_start=variables_to_warm_start)
+  else:
+    warm_start_settings = None
 
   try:
     variables_to_train = s3dg_vars[args.variables_to_train]
   except KeyError:
     variables_to_train = None
+
+  try:
+    weights = metric_weights[args.metric_weights]
+  except KeyError:
+    weights = None
 
   # create the model
   classifier = tf.estimator.Estimator(
@@ -294,7 +315,13 @@ def main(argv):
       'momentum': args.momentum,
       'dropout_rate': args.dropout_rate,
       'variables_to_train': variables_to_train,
-      'weight_decay': args.weight_decay
+      'weight_decay': args.weight_decay,
+      'min_depth': args.min_depth,
+      'depth_multiplier': args.depth_multiplier,
+      'add_image_summaries': args.add_image_summaries,
+      'clip_length': args.clip_length,
+      'batch_size': args.batch_size,
+      'metric_weights': weights
     },
     config=estimator_config,
     warm_start_from=warm_start_settings)
@@ -303,10 +330,14 @@ def main(argv):
     # train and evaluate the model.
     tf.estimator.train_and_evaluate(
       estimator=classifier,
-      train_spec=tf.estimator.TrainSpec(input_fn=get_train_dataset,
-                                        max_steps=args.train_steps),
-      eval_spec=tf.estimator.EvalSpec(input_fn=get_eval_dataset, steps=None,
-                                      start_delay_secs=0, throttle_secs=0))
+      train_spec=tf.estimator.TrainSpec(
+        input_fn=get_train_dataset,
+        max_steps=args.train_steps),
+      eval_spec=tf.estimator.EvalSpec(
+        input_fn=get_eval_dataset,
+        steps=None,
+        start_delay_secs=0,
+        throttle_secs=0))
   elif args.mode == 'train':
     # train the model.
     classifier.train(input_fn=get_train_dataset, steps=args.train_steps)
@@ -314,17 +345,17 @@ def main(argv):
     # evaluate the model.
     eval_result = classifier.evaluate(input_fn=get_eval_dataset)
     tf.logging.info(
-      '\nTraining set metrics:\n\tauc: {auc:0.3f}\n\tprecision: '
-      '{precision:0.3f}\n\trecall: {recall:0.3f}\n\tf1: {f1:0.3f}\n'.format(
-        **eval_result))
+      '\nEvaluation set metrics:\n\tauc: {Metrics/eval/auc:0.3f}\n\tprecision: '
+      '{Metrics/eval/precision:0.3f}\n\trecall: {Metrics/eval/recall:0.3f}'
+      '\n\tf1: {Metrics/eval/f1:0.3f}\n'.format(**eval_result))
   elif args.mode == 'predict':
     # Generate predictions from the model
-    predictions = classifier.predict(input_fn=get_eval_dataset)
+    predictions = classifier.predict(input_fn=get_predict_dataset)
 
     labels = []
 
     with tf.Session().as_default() as sess:
-      dataset = get_test_dataset()
+      dataset = get_predict_dataset()
       iterator = dataset.make_one_shot_iterator()
       get_next = iterator.get_next()
 
@@ -334,13 +365,15 @@ def main(argv):
         except tf.errors.OutOfRangeError:
           break
 
-    for pred_dict, expec in zip(predictions, labels):
+    for count, pred_dict, expec in zip(range(len(labels)), predictions, labels):
       probability = pred_dict['probabilities']
       tf.logging.info('\nPrediction is\n\t{},\nexpected\n\t{}'.format(
-        probability, expec))
-      tf.logging.info('\nDifference is\n\t{}'.format(np.not_equal(
-        probability, expec)))
-      tf.logging.info('\nDifference is\n\t{}'.format(np.arange(args.num_classes)))
+        np.round(probability), expec))
+      tf.logging.info('{} Num not equal: {}'.format(count, np.sum(np.not_equal(
+        np.round(probability), expec))))
+      tf.logging.info('\nWhere not equal:\n\t{}'.format(np.not_equal(
+        np.round(probability), expec)))
+      # tf.logging.info('\nDifference is\n\t{}'.format(np.arange(args.num_classes)))
   elif args.mode == 'export':
     def serving_input_receiver_fn():
       """An input receiver that expects a serialized tf.Example."""
@@ -349,7 +382,7 @@ def main(argv):
       parsed_features = tf.parse_single_example(
         serialized_tf_example, feature_spec)
 
-      parsed_features['feature'], parsed_features['label'] = preprocess_example(
+      parsed_features['feature'], parsed_features['label'] = preprocess_for_eval(
         parsed_features['feature'], parsed_features['label'])
 
       return tf.estimator.export.TensorServingInputReceiver(
@@ -374,6 +407,8 @@ parser.add_argument('--prefetch_size', default=tf.data.experimental.AUTOTUNE,
 parser.add_argument('--monitor_steps', default=100, type=int)
 parser.add_argument('--train_steps', default=None, type=int)
 parser.add_argument('--num_classes', default=204, type=int)
+parser.add_argument('--min_depth', default=16, type=int)
+parser.add_argument('--depth_multiplier', default=1., type=float)
 parser.add_argument('--learning_rate', default=1e-1, type=float)
 parser.add_argument('--optimizer', default='momentum', help='sgd or momentum')
 parser.add_argument('--momentum', default=.9, type=float)
@@ -385,17 +420,20 @@ parser.add_argument('--clip_length', default=64, type=int)
 parser.add_argument('--frame_height', default=s3dg.default_image_size, type=int)
 parser.add_argument('--frame_width', default=s3dg.default_image_size, type=int)
 parser.add_argument('--channels', default=3, type=int)
+parser.add_argument('--warm_start', action='store_true')
 parser.add_argument('--variables_to_warm_start', default=None)
 parser.add_argument('--variables_to_train', default=None)
+parser.add_argument('--add_image_summaries', type=bool, default=True)
 parser.add_argument('--train_subset_dir_path', default=None)
 parser.add_argument('--eval_subset_dir_path', default=None)
-parser.add_argument('--test_subset_dir_path', default=None)
+parser.add_argument('--predict_subset_dir_path', default=None)
 parser.add_argument('--tfrecord_size', default=40, type=int,
                     help='approximate size of the given data set\'s tfrecords '
                          'in bytes')
 parser.add_argument('--checkpoint_path',default=None)
 parser.add_argument('--export_path',default=None)
 parser.add_argument('--model_dir', required=True)
+parser.add_argument('--metric_weights',default=None)
 
 
 if __name__ == '__main__':
