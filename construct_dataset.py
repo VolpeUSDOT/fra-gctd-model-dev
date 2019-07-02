@@ -13,8 +13,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--data_source_dir_path', required=True)
 parser.add_argument('--data_set_dir_path', required=True)
 parser.add_argument('--batch_size', default=4, type=int)
-parser.add_argument('--buffer_size', default=1024, type=int)
+parser.add_argument('--shuffle_buffer_size', default=1024, type=int)
 parser.add_argument('--clip_length', default=64, type=int)
+parser.add_argument('--shuffle', action='store_true')
 
 args = parser.parse_args()
 
@@ -99,7 +100,10 @@ def gen_fn():
 dataset = tf.data.Dataset.from_generator(
   gen_fn, output_types=tf.string, output_shapes=[])
 
-dataset = dataset.shuffle(buffer_size=args.buffer_size).batch(args.batch_size)
+if args.shuffle:
+  dataset = dataset.shuffle(shuffle_buffer_size=args.shuffle_buffer_size)
+
+dataset = dataset.batch(args.batch_size)
 
 initializer = dataset.make_one_shot_iterator()
 
