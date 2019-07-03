@@ -9,7 +9,7 @@ import numpy as np
 from os import cpu_count, path, putenv
 from s3dg_vars import s3dg_vars
 from preprocessing.s3dg_preprocessing import preprocess_video
-from metric_weights import metric_weights
+from metric_weights import metric_weights, weight_bounds
 
 slim = tf.contrib.slim
 
@@ -361,19 +361,29 @@ def main(argv):
 
       while True:
         try:
-          labels.append(sess.run(get_next)[1])
+          # sess.run outputs numpy arrays, so we use numpy downstream
+          feature, label = sess.run(get_next)
+          labels.append(label)
         except tf.errors.OutOfRangeError:
           break
 
-    for count, pred_dict, expec in zip(range(len(labels)), predictions, labels):
-      probability = pred_dict['probabilities']
-      tf.logging.info('\nPrediction is\n\t{},\nexpected\n\t{}'.format(
-        np.round(probability), expec))
-      tf.logging.info('{} Num not equal: {}'.format(count, np.sum(np.not_equal(
-        np.round(probability), expec))))
-      tf.logging.info('\nWhere not equal:\n\t{}'.format(np.not_equal(
-        np.round(probability), expec)))
-      # tf.logging.info('\nDifference is\n\t{}'.format(np.arange(args.num_classes)))
+    for count, pred_dict, truth in zip(range(len(labels)), predictions, labels):
+      truth = np.squeeze(truth)
+      probabilities = pred_dict['probabilities']
+      abs_error = np.abs(np.subtract(truth, probabilities))
+      classifications = np.round(probabilities)
+
+      if args.metric_weights:
+        lower_bound, upper_bound = weight_bounds[args.metric_weights]
+        abs_error = abs_error[lower_bound:upper_bound]
+        classifications = classifications[lower_bound:upper_bound]
+        truth = truth[lower_bound:upper_bound]
+
+      num_not_equal = np.sum(np.not_equal(classifications, truth))
+
+      tf.logging.info('{}: num_not_equal: {}, abs_error: {}'.format(
+        count, num_not_equal, np.round(abs_error, 3)))
+
   elif args.mode == 'export':
     def serving_input_receiver_fn():
       """An input receiver that expects a serialized tf.Example."""
@@ -433,7 +443,7 @@ parser.add_argument('--tfrecord_size', default=40, type=int,
 parser.add_argument('--checkpoint_path',default=None)
 parser.add_argument('--export_path',default=None)
 parser.add_argument('--model_dir', required=True)
-parser.add_argument('--metric_weights',default=None)
+parser.add_argument('--metric_weights',default=None, help="One of {gate, veh, trn, ped, cyc}")
 
 
 if __name__ == '__main__':
