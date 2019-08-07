@@ -24,7 +24,7 @@ Patrick Fay. https://github.com/oaubert/python-vlc/blob/master/examples/tkvlc.py
 """
 
 import argparse as ap
-from classes import class_list_204
+from classes import class_names_204
 import json
 import numpy as np
 import os
@@ -150,7 +150,7 @@ class Player(tk.Frame):
     self.num_clips = None
     self.current_clip = None
 
-    self.class_list = class_list_204
+    self.class_list = class_names_204
 
     self.default_data_source_path = args.defaultdatasourcepath
     self.subsamplerate = args.subsamplerate

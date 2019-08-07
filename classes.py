@@ -1,4 +1,4 @@
-class_list_204 = [
+class_names_204 = [
       'anomaly',
       'gates_up',
       'gates_down',
