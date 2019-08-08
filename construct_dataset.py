@@ -101,7 +101,7 @@ dataset = tf.data.Dataset.from_generator(
   gen_fn, output_types=tf.string, output_shapes=[])
 
 if args.shuffle:
-  dataset = dataset.shuffle(shuffle_buffer_size=args.shuffle_buffer_size)
+  dataset = dataset.shuffle(buffer_size=args.shuffle_buffer_size)
 
 dataset = dataset.batch(args.batch_size)
 
