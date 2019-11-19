@@ -9,7 +9,7 @@ import numpy as np
 from os import cpu_count, path, putenv
 from s3dg_vars import s3dg_vars
 from preprocessing.s3dg_preprocessing import preprocess_video
-from metric_weights import metric_weights, weight_bounds
+from metric_weights_96 import metric_weights, weight_bounds
 
 slim = tf.contrib.slim
 
@@ -92,14 +92,15 @@ def s3dg_fn(features, labels, mode, params):
   tf.summary.scalar('Losses/total_loss', total_loss)
 
   # Compute evaluation metrics.
-  auc = tf.metrics.auc(
-    labels=labels, predictions=predicted_classes, name='auc_op', weights=params['metric_weights'])
+  auc = tf.metrics.auc(labels=labels, predictions=predicted_classes,
+                       name='auc_op', weights=params['metric_weights'])
 
   precision = tf.metrics.precision(
-    labels=labels, predictions=predicted_classes, name='precision_op', weights=params['metric_weights'])
+    labels=labels, predictions=predicted_classes, name='precision_op',
+    weights=params['metric_weights'])
 
-  recall = tf.metrics.recall(
-    labels=labels, predictions=predicted_classes, name='recall_op', weights=params['metric_weights'])
+  recall = tf.metrics.recall(labels=labels, predictions=predicted_classes,
+                             name='recall_op', weights=params['metric_weights'])
 
   f1 = f1_metric(labels=labels, predictions=predicted_classes, name='f1_op',
                  weights=params['metric_weights'])
@@ -186,6 +187,14 @@ def main(argv):
     return preprocess_video(
       feature, label, args.num_classes, args.clip_length, args.frame_height,
       args.frame_width, args.channels, is_training=True)
+
+  def preprocess_for_predict(feature):
+    return preprocess_video(
+      feature, None, args.num_classes, args.clip_length, args.frame_height,
+      args.frame_width, args.channels, should_crop=True, crop_y=args.cropy,
+      crop_x=args.cropx, crop_height=args.cropheight, crop_width=args.cropwidth,
+      should_resize=True, resize_height=s3dg.default_image_size,
+      resize_width=s3dg.default_image_size)
 
   def get_train_dataset():
     dataset = tf.data.Dataset.list_files(
@@ -367,22 +376,33 @@ def main(argv):
         except tf.errors.OutOfRangeError:
           break
 
+    errors = np.ndarray((len(labels), args.num_classes), dtype=np.float32)
+    classifications = np.ndarray((len(labels), args.num_classes), dtype=np.float32)
+    # inequality_count = np.ndarray((predictions.shape[0],), dtype=np.int32)
+
     for count, pred_dict, truth in zip(range(len(labels)), predictions, labels):
       truth = np.squeeze(truth)
       probabilities = pred_dict['probabilities']
       abs_error = np.abs(np.subtract(truth, probabilities))
-      classifications = np.round(probabilities)
+      probabilities = np.round(probabilities)
 
       if args.metric_weights:
         lower_bound, upper_bound = weight_bounds[args.metric_weights]
         abs_error = abs_error[lower_bound:upper_bound]
-        classifications = classifications[lower_bound:upper_bound]
+        probabilities = probabilities[lower_bound:upper_bound]
         truth = truth[lower_bound:upper_bound]
 
-      num_not_equal = np.sum(np.not_equal(classifications, truth))
+      # num_not_equal = np.sum(np.not_equal(probabilities, truth))
 
-      tf.logging.info('{}: num_not_equal: {}, abs_error: {}'.format(
-        count, num_not_equal, np.round(abs_error, 3)))
+      # inequality_count[count] = num_not_equal
+      errors[count] = np.round(abs_error, 3)
+      classifications[count] = probabilities
+      # tf.logging.info('{}: num_not_equal: {}, abs_error: {}'.format(
+      #   count, num_not_equal, np.round(abs_error, 3)))
+
+    # tf.logging.info('inequality_count:\n{}'.format(inequality_count))
+    # tf.logging.info('classifications:\n{}'.format(list(classifications[:, 77].astype(np.int8))))
+    tf.logging.info('errors:\n{}'.format(list(errors[:, 77])))
 
   elif args.mode == 'export':
     def serving_input_receiver_fn():
@@ -402,10 +422,24 @@ def main(argv):
     classifier.export_saved_model(
       args.export_path, serving_input_receiver_fn=serving_input_receiver_fn,
       checkpoint_path=args.checkpoint_path)
+
+  elif args.mode == 'export_for_production':
+    def serving_input_receiver_fn():
+      """An input receiver that expects a raw RGB video clip."""
+      byte_string_list = tf.placeholder(
+        dtype=tf.float32, shape=[None, args.clip_length, args.frame_height,
+                                 args.frame_width, args.channels])
+
+      return tf.estimator.export.TensorServingInputReceiver(
+        features=byte_string_list, receiver_tensors=byte_string_list)
+
+    classifier.export_saved_model(
+      args.export_path, serving_input_receiver_fn=serving_input_receiver_fn,
+      checkpoint_path=args.checkpoint_path)
   else:
-    raise ValueError(
-      '--mode parameter requires specification using an argument from the set'
-        ' {\'train\', \'eval\', \'predict\'}')
+    raise ValueError('--mode parameter requires specification using an argument'
+                     ' from the set {\'train\', \'eval\', \'predict\','
+                     ' \'export\', \'export_for_production\'}')
 
 parser = argparse.ArgumentParser()
 
@@ -430,6 +464,15 @@ parser.add_argument('--clip_length', default=64, type=int)
 parser.add_argument('--frame_height', default=s3dg.default_image_size, type=int)
 parser.add_argument('--frame_width', default=s3dg.default_image_size, type=int)
 parser.add_argument('--channels', default=3, type=int)
+parser.add_argument('--crop', '-c', action='store_true')
+parser.add_argument('--cropheight', '-ch', type=int, default=920,
+                    help='y-component of bottom-right corner of crop.')
+parser.add_argument('--cropwidth', '-cw', type=int, default=1920,
+                    help='x-component of bottom-right corner of crop.')
+parser.add_argument('--cropx', '-cx', type=int, default=0,
+                    help='x-component of top-left corner of crop.')
+parser.add_argument('--cropy', '-cy', type=int, default=82,
+                    help='y-component of top-left corner of crop.')
 parser.add_argument('--warm_start', action='store_true')
 parser.add_argument('--variables_to_warm_start', default=None)
 parser.add_argument('--variables_to_train', default=None)
@@ -443,7 +486,8 @@ parser.add_argument('--tfrecord_size', default=40, type=int,
 parser.add_argument('--checkpoint_path',default=None)
 parser.add_argument('--export_path',default=None)
 parser.add_argument('--model_dir', required=True)
-parser.add_argument('--metric_weights',default=None, help="One of {gate, veh, trn, ped, cyc}")
+parser.add_argument('--metric_weights',default=None,
+                    help="One of {gate, veh, trn, ped, cyc}")
 
 
 if __name__ == '__main__':
