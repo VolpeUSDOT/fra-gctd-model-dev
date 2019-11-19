@@ -58,10 +58,33 @@ def distort_color(image, color_ordering=0, fast_mode=True, scope=None):
 
 def preprocess_video(
     video, label, num_classes, length, height, width, channels,
-    is_training=False, fast_mode=False):
+    is_training=False, fast_mode=False, should_crop=False, crop_y=None,
+    crop_x=None, crop_height=None, crop_width=None, should_resize=False,
+    resize_height=None, resize_width=None):
+  tf.logging.info('input video: {}'.format(video))
   video = tf.decode_raw(video, tf.uint8)
+  tf.logging.info('decoded video: {}'.format(video))
   video = tf.reshape(video, [length, height, width, channels])
+  tf.logging.info('reshaped video: {}'.format(video))
+
+  if should_crop:
+    if crop_y and crop_x and crop_height and crop_width:
+      video = video[:, crop_y:crop_y + crop_height, crop_x:crop_x + crop_width]
+      tf.logging.info('cropped video: {}'.format(video))
+    else:
+      ValueError('When should_crop is True, crop_y, crop_x, crop_height and '
+                 'crop_width must not be None.')
+
   video = tf.image.convert_image_dtype(video, dtype=tf.float32)
+  tf.logging.info('dtype-converted video: {}'.format(video))
+
+  if should_resize:
+    if not (resize_height is None or resize_width is None):
+      video = tf.image.resize_bilinear(video, [resize_height, resize_width])
+      tf.logging.info('resized video: {}'.format(video))
+    else:
+      ValueError('When should_resize is True, resize_height and resize_width '
+                 'must not be None.')
 
   if is_training:
     num_distort_cases = 1 if fast_mode else 4
@@ -74,7 +97,9 @@ def preprocess_video(
   video = tf.multiply(video, 2.0)
 
   # leave label dtype equal to uint8 to avoid underflow when evaluating
-  label = tf.decode_raw(label, tf.uint8)
-  label = tf.reshape(label, [num_classes, ])
-
-  return video, label
+  if label is not None:
+    label = tf.decode_raw(label, tf.uint8)
+    label = tf.reshape(label, [num_classes, ])
+    return video, label
+  else:
+    return video
