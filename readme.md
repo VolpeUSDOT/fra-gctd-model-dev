@@ -1,5 +1,5 @@
-# FRA Grade Crossing Behavior Detection Machine Learning Model Development
-This repository is home to the python scripts used to modify and train the pre-trained grade crossing behavior detection model. 
+# FRA Grade Crossing Trespass Detection Machine Learning Model Development
+This repository is home to the python scripts used to modify and fine-tune the pre-trained detection model.
 
 #### Folder Structure
 **/PhaseOne**   *Phase one model development using Tensorflow 1.x*
