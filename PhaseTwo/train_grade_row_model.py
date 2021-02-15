@@ -12,9 +12,9 @@ from PIL import Image
 from fra_gctd_seg_dataset import gctd_dataset
 
 # Basic settings
-num_example_images = 10                         # Number of test images to annoate and save for manual inspection
+num_example_images = 25                         # Number of test images to annoate and save for manual inspection
 num_classes = 2                                 # Number of classes in the dataset
-num_epochs = 10                                 # Number of epochs to train the model
+num_epochs = 5                                  # Number of epochs to train the model
 
 # file locations
 dataset_basepath = '../../temp/gctd_seg'
@@ -74,7 +74,7 @@ def instance_segmentation_visualize(img, predictions, threshold=0.00001, rect_th
     for i in range(len(masks)):
         rgb_mask = colour_masks(masks[i], LABEL_COLORS[i])
         rgb_mask = rgb_mask.transpose(2,0,1)
-        img = cv2.addWeighted(img, 1, rgb_mask, 0.5, 0)
+        img = cv2.addWeighted(img, 1, rgb_mask, 0.25, 0)
         cv2.rectangle(img, boxes[i][0], boxes[i][1],color=(0, 255, 0), thickness=rect_th)
         cv2.putText(img,pred_cls[i], boxes[i][0], cv2.FONT_HERSHEY_SIMPLEX, text_size, (0,255,0),thickness=text_th)
     return img
@@ -100,8 +100,10 @@ def get_model_instance_segmentation(num_classes):
 def get_transform(train):
     transforms = []
     transforms.append(T.ToTensor())
-    if train:
-        transforms.append(T.RandomHorizontalFlip(0.5))
+    # if train:
+    #     transforms.append(torchvision.transforms.ColorJitter(brightness=0.5,contrast=0.5,saturation=0.5,hue=0.1))
+    #     transforms.append(torchvision.transforms.RandomRotation(1))
+        # transforms.append(T.RandomHorizontalFlip(0.5))
     return T.Compose(transforms)
 
 # train on the GPU or on the CPU, if a GPU is not available
