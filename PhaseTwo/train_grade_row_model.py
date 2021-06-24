@@ -13,7 +13,7 @@ from fra_gctd_seg_dataset import gctd_dataset
 
 # Basic settings
 num_example_images = 25                         # Number of test images to annoate and save for manual inspection
-num_classes = 2                                 # Number of classes in the dataset
+num_classes = 3                                 # Number of classes in the dataset
 num_epochs = 5                                  # Number of epochs to train the model
 
 # file locations
@@ -21,7 +21,7 @@ dataset_basepath = '../../temp/gctd_seg'
 
 # category names
 CATEGORY_NAMES = [
-    'GradeCrossing', 'RightOfWay'
+    '__background__', 'GradeCrossing', 'RightOfWay'
 ]
 LABEL_COLORS = [[0, 0, 255],[0, 255, 0],[255, 0, 0],[0, 255, 255],[255, 255, 0],[255, 0, 255],[80, 70, 180]]
 
@@ -107,7 +107,7 @@ def get_transform(train):
     return T.Compose(transforms)
 
 # train on the GPU or on the CPU, if a GPU is not available
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device('cuda:1') if torch.cuda.is_available() else torch.device('cpu')
 
 # use our dataset and defined transformations
 dataset = gctd_dataset(dataset_basepath, get_transform(train=True))
@@ -142,16 +142,16 @@ lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
                                                 step_size=3,
                                                 gamma=0.1)
 
-for epoch in range(num_epochs):
-    # train for one epoch, printing every 10 iterations
-    train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=10)
-    # update the learning rate
-    lr_scheduler.step()
-    # evaluate on the test dataset
-    evaluate(model, data_loader_test, device=device)
+# for epoch in range(num_epochs):
+#     # train for one epoch, printing every 10 iterations
+#     train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=10)
+#     # update the learning rate
+#     lr_scheduler.step()
+#     # evaluate on the test dataset
+#     evaluate(model, data_loader_test, device=device)
 
-# save model
-torch.save(model.state_dict(), 'gctd_grade-row.pt')
+# # save model
+# torch.save(model.state_dict(), 'gctd_grade-row.pt')
 
 # test to make sure the model saved correctly
 model.load_state_dict(torch.load('gctd_grade-row.pt'))
