@@ -144,4 +144,6 @@ PhaseTwo/pyvenv.cfg
 # Temp
 temp
 
+# Project specific exclusions
 .vs
+.vscode
