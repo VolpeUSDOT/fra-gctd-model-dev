@@ -22,9 +22,7 @@ import numpy as np
 import torchvision
 from torchvision import datasets, models, transforms
 import matplotlib.pyplot as plt
-import time
 import os
-import copy
 from pathlib import Path
 from collections import Counter
 from torchvision.transforms.transforms import Resize
@@ -72,8 +70,8 @@ if __name__ == '__main__':
         os.mkdir(model_path)
 
     # Types of models =  [resnet, alexnet, vgg, squeezenet, densenet, inception]
-    # model_names = ['squeezenet','densenet']
-    model_names = ['squeezenet']
+    model_names = ['resnet','vgg','inception','squeezenet','densenet']
+    # model_names = ['squeezenet']
 
     results = []
 
@@ -110,11 +108,14 @@ if __name__ == '__main__':
         model_ft = model_ft.to(device)
 
         params_to_update = model_ft.parameters()
-        print('Number of classes:', num_classes)
 
-        class_counts = dict(Counter(sample_tup[1] for sample_tup in dataset))
-        class_counts = dict(sorted(class_counts.items()))
-        print(class_counts)
+        training_class_counts = dict(Counter(sample_tup[1] for sample_tup in image_datasets['train']))
+        training_class_counts = dict(sorted(training_class_counts.items()))
+        print('Training label counts\t',training_class_counts)
+
+        validation_class_counts = dict(Counter(sample_tup[1] for sample_tup in image_datasets['val']))
+        validation_class_counts = dict(sorted(validation_class_counts.items()))
+        print('Validation label counts\t',validation_class_counts)
 
         classNames = dataset.classes
         print("Params to learn:")
@@ -133,11 +134,11 @@ if __name__ == '__main__':
 
         criterion = nn.CrossEntropyLoss()
 
-        model_ft, hist, best_acc = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft, device, num_classes, num_epochs=num_epochs, is_inception=(model_name=="inception"))
+        model_ft, hist, best_acc = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft, device, num_classes, training_class_counts, validation_class_counts, labels, num_epochs=num_epochs, is_inception=(model_name=="inception"))
 
         ohist = []
 
-        ohist = [h.cpu().numpy() for h in hist]
+        ohist = [float(h) for h in hist]
 
         results.append(ohist)
 

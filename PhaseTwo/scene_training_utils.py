@@ -39,7 +39,7 @@ def save_labels(labels, label_file):
     
     outputfile.close()
 
-def train_model(model, dataloaders, criterion, optimizer, device, num_classes, num_epochs=25, is_inception=False):
+def train_model(model, dataloaders, criterion, optimizer, device, num_classes, train_class_counts, val_class_counts, dataset_labels, num_epochs=25, is_inception=False):
     since = time.time()
 
     val_acc_history = []
@@ -49,7 +49,7 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_classes, n
 
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
-        print('-' * 10)
+        print('-' * 50)
 
         for phase in ['train', 'val']:
             if phase == 'train':
@@ -91,25 +91,48 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_classes, n
                     preds_bylabel = torch.where(preds == labelID, preds, -1)
                     # print("Labels",labelID,"]", torch.where(labels.data == labelID, labels.data, -1))
                     labels_bylabel = torch.where(labels.data == labelID, labels.data, -1)
+
+                    mask = preds_bylabel.ge(0)
+                    preds_bylabel = torch.masked_select(preds_bylabel, mask)
+                    labels_bylabel = torch.masked_select(labels_bylabel, mask)
+                    # print(preds_bylabel,labels_bylabel)
+
                     running_label_corrects[labelID] += torch.sum(preds_bylabel == labels_bylabel)
+
+                    # print(torch.sum(preds_bylabel == labels_bylabel))
+                
+                # print(running_label_corrects)
 
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
             epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
 
             # by label accuracy / precision / recall
+            print('{:<15} {:<15}'.format('Label','Accuracy'))
+            labels_val_acc = []
             for classID in range(0, num_classes):
-                classCount = 0
-                
+                if(phase == 'val'):
+                    label_val_acc = float(running_label_corrects[classID].double() / val_class_counts[classID])
+                    labels_val_acc.append(label_val_acc)
+                    print('{:<15} {:<15}'.format(dataset_labels[classID],label_val_acc))
+                    # print(dataset_labels[classID],"\t", " Acc:", float(running_label_corrects[classID].double() / val_class_counts[classID]))
+                    
+                if(phase == "train"):
+                    print('{:<15} {:<15}'.format(dataset_labels[classID],float(running_label_corrects[classID].double() / train_class_counts[classID])))
+                    # print(dataset_labels[classID],"\t", " Acc:", float(running_label_corrects[classID].double() / train_class_counts[classID]))
+                # print("ClassID:", classID, " Acc:", float(running_label_corrects[classID].double() / len(dataloaders[phase].dataset)))
+            if(phase == 'val'):
+                average_val_acc = sum(labels_val_acc) / len(labels_val_acc)
+            
+            print('-' * 50) 
+            print(' {} Total Loss: {:.4f} \tTotal Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
+            print('-' * 50) 
 
-                # print("ClassID #", classID, " Acc:", running_label_corrects[classID].double() / classCount)
-
-            print('{} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
-
-            if phase == 'val' and epoch_acc > best_acc:
-                best_acc = epoch_acc
+            if phase == 'val' and average_val_acc > best_acc:
+                best_acc = average_val_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
             if phase == 'val':
-                val_acc_history.append(epoch_acc)
+                print('Average Epoch Label Val Acc:', average_val_acc)
+                val_acc_history.append(average_val_acc)
 
         print()
 
