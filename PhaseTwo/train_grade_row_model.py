@@ -42,7 +42,6 @@ def colour_masks(image, color):
 
 def parse_seg_prediction(pred, threshold):
     pred_score = list(pred['scores'].detach().cpu().numpy())
-    # print(pred_score)
     pred_t = [pred_score.index(x) for x in pred_score if x>threshold][-1]
 
     masks = []
@@ -75,7 +74,6 @@ def parse_seg_prediction(pred, threshold):
 def instance_segmentation_visualize(img, predictions, threshold=0.00001, rect_th=3, text_size=1, text_th=2):
     masks, boxes, pred_cls = parse_seg_prediction(predictions, threshold)
     for i in range(len(masks)):
-        # print(pred_cls[i])
         rgb_mask = colour_masks(masks[i], LABEL_COLORS[pred_cls[i]])
         rgb_mask = rgb_mask.transpose(2,0,1)
         img = cv2.addWeighted(img, 1, rgb_mask, 0.25, 0)
