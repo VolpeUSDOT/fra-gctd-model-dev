@@ -29,11 +29,11 @@ from torchvision.transforms.transforms import Resize
 from scene_training_utils import *
 
 # training parameters
-batch_size = 32
+batch_size = 64
 num_epochs = 26
-learning_rate = 0.002
+learning_rate = 0.001
 learning_momentum = 0.9
-num_workers = 12
+num_workers = 16
 feature_extract = True
 
 # Detect if we have a GPU available
@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
     # location of the training data
     data_dir = "/mnt/ml_data/FRA/Phase2/TrainingData/"
-    dataset_name = "grade_v1"
+    dataset_name = "grade_v5"
 
     # where to put any visualizations
     report_path = Path("PhaseTwo/report")
@@ -70,8 +70,8 @@ if __name__ == '__main__':
         os.mkdir(model_path)
 
     # Types of models =  [resnet, alexnet, vgg, squeezenet, densenet, inception]
-    model_names = ['resnet','vgg','inception','squeezenet','densenet']
-    # model_names = ['squeezenet']
+    # model_names = ['resnet','vgg','inception','squeezenet','densenet']
+    model_names = ['squeezenet','resnet']
 
     results = []
 
@@ -83,14 +83,14 @@ if __name__ == '__main__':
 
         data_transforms = {
             'train': transforms.Compose([
-                transforms.Resize(input_size),
+                transforms.Resize((input_size, input_size)),
                 transforms.ColorJitter(brightness=.2, contrast=.2, saturation=.2, hue=.1),
                 transforms.RandomRotation(1),
                 transforms.ToTensor(),
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
             ]),
             'val': transforms.Compose([
-                transforms.Resize(input_size),
+                transforms.Resize((input_size,input_size)),
                 # transforms.CenterCrop(input_size),
                 transforms.ToTensor(),
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -98,7 +98,7 @@ if __name__ == '__main__':
 }
 
         dataset = datasets.ImageFolder(os.path.join(data_dir, dataset_name), transform=data_transforms['train'])
-        image_datasets = train_val_dataset(dataset)
+        image_datasets = train_val_dataset(dataset, val_split=0.15)
         dataloaders_dict = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size, shuffle=True, num_workers=num_workers) for x in ['train', 'val']}
         labels = image_datasets['train'].dataset.classes
         num_classes = len(labels)
@@ -147,7 +147,7 @@ if __name__ == '__main__':
         plt.ylabel("Validation Accuracy")
         plt.plot(range(1,num_epochs+1),ohist,label='{:.0%}'.format(best_acc) + " Pretrained " + model_name)
         plt.ylim((0,1.))
-        plt.xticks(np.arange(1, num_epochs+1, 0.5))
+        plt.xticks(np.arange(1, num_epochs+1, 5.0))
         plt.legend()
         plt.savefig(report_path / 'model-comparison.jpg')
 

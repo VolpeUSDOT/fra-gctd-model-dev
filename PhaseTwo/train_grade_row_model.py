@@ -1,3 +1,4 @@
+from pycocotools import mask
 import torch
 import random
 import numpy as np
@@ -12,18 +13,20 @@ from PIL import Image
 from fra_gctd_seg_dataset import gctd_dataset
 
 # Basic settings
-num_example_images = 25                         # Number of test images to annoate and save for manual inspection
+trainModel = True                               # flag used to toggle model training / saving vs. generating test output
+num_example_images = 50                         # Number of test images to annoate and save for manual inspection
 num_classes = 3                                 # Number of classes in the dataset
 num_epochs = 5                                  # Number of epochs to train the model
 
 # file locations
-dataset_basepath = '../../temp/gctd_seg'
+dataset_basepath = '/mnt/ml_data/FRA/Phase2/TrainingData/grade_segmentation'
 
 # category names
 CATEGORY_NAMES = [
     '__background__', 'GradeCrossing', 'RightOfWay'
 ]
-LABEL_COLORS = [[0, 0, 255],[0, 255, 0],[255, 0, 0],[0, 255, 255],[255, 255, 0],[255, 0, 255],[80, 70, 180]]
+# POSSIBLE_LABEL_COLORS = [[0, 0, 255],[0, 255, 0],[255, 0, 0],[0, 255, 255],[255, 255, 0],[255, 0, 255],[80, 70, 180]]
+LABEL_COLORS = {"GradeCrossing":[0, 0, 255],"RightOfWay":[0, 255, 0]}
 
 def pil_to_cv(image):
     new_image = np.array(image)
@@ -39,7 +42,7 @@ def colour_masks(image, color):
 
 def parse_seg_prediction(pred, threshold):
     pred_score = list(pred['scores'].detach().cpu().numpy())
-    print(pred_score)
+    # print(pred_score)
     pred_t = [pred_score.index(x) for x in pred_score if x>threshold][-1]
 
     masks = []
@@ -47,7 +50,7 @@ def parse_seg_prediction(pred, threshold):
     if len(pred['masks']) > 1:
         masks = (pred['masks']>0.5).squeeze().detach().cpu().numpy()
     else:
-        masks.append(pred['masks'][0][0].detach().cpu().numpy())
+        masks.append((pred['masks'][0][0]>0.5).detach().cpu().numpy())
     
     pred_class = [CATEGORY_NAMES[i] for i in list(pred['labels'].cpu().numpy())]
     pred_boxes = [[(i[0], i[1]), (i[2], i[3])] for i in list(pred['boxes'].detach().cpu().numpy())]
@@ -72,11 +75,12 @@ def parse_seg_prediction(pred, threshold):
 def instance_segmentation_visualize(img, predictions, threshold=0.00001, rect_th=3, text_size=1, text_th=2):
     masks, boxes, pred_cls = parse_seg_prediction(predictions, threshold)
     for i in range(len(masks)):
-        rgb_mask = colour_masks(masks[i], LABEL_COLORS[i])
+        # print(pred_cls[i])
+        rgb_mask = colour_masks(masks[i], LABEL_COLORS[pred_cls[i]])
         rgb_mask = rgb_mask.transpose(2,0,1)
         img = cv2.addWeighted(img, 1, rgb_mask, 0.25, 0)
-        cv2.rectangle(img, boxes[i][0], boxes[i][1],color=(0, 255, 0), thickness=rect_th)
-        cv2.putText(img,pred_cls[i], boxes[i][0], cv2.FONT_HERSHEY_SIMPLEX, text_size, (0,255,0),thickness=text_th)
+        # cv2.rectangle(img, boxes[i][0], boxes[i][1], color=(0, 255, 0), thickness=rect_th)
+        # cv2.putText(img,pred_cls[i], boxes[i][0], cv2.FONT_HERSHEY_SIMPLEX, text_size, (0,255,0),thickness=text_th)
     return img
 
 def get_model_instance_segmentation(num_classes):
@@ -100,10 +104,8 @@ def get_model_instance_segmentation(num_classes):
 def get_transform(train):
     transforms = []
     transforms.append(T.ToTensor())
-    # if train:
-    #     transforms.append(torchvision.transforms.ColorJitter(brightness=0.5,contrast=0.5,saturation=0.5,hue=0.1))
-    #     transforms.append(torchvision.transforms.RandomRotation(1))
-        # transforms.append(T.RandomHorizontalFlip(0.5))
+    if train:
+        transforms.append(T.RandomHorizontalFlip(0.5))
     return T.Compose(transforms)
 
 # train on the GPU or on the CPU, if a GPU is not available
@@ -140,21 +142,21 @@ optimizer = torch.optim.SGD(params, lr=0.005,
 # and a learning rate scheduler
 lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
                                                 step_size=3,
-                                                gamma=0.1)
+                                                gamma=0.11)
+if(trainModel == True):
+    for epoch in range(num_epochs):
+        # train for one epoch, printing every 10 iterations
+        train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=10)
+        # update the learning rate
+        lr_scheduler.step()
+        # evaluate on the test dataset
+        evaluate(model, data_loader_test, device=device)
 
-# for epoch in range(num_epochs):
-#     # train for one epoch, printing every 10 iterations
-#     train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=10)
-#     # update the learning rate
-#     lr_scheduler.step()
-#     # evaluate on the test dataset
-#     evaluate(model, data_loader_test, device=device)
-
-# # save model
-# torch.save(model.state_dict(), 'gctd_grade-row.pt')
+    # save model
+    torch.save(model.state_dict(), 'models/gctd_grade-row.pt')
 
 # test to make sure the model saved correctly
-model.load_state_dict(torch.load('gctd_grade-row.pt'))
+model.load_state_dict(torch.load('models/gctd_grade-row.pt'))
 # put the model in evaluation mode
 model.eval()
 model.to(device)
@@ -171,5 +173,5 @@ for x in range(num_example_images):
         final_image = instance_segmentation_visualize(img,prediction[0])
         final_image = final_image.transpose(1,2,0)
         final_image = cv2.cvtColor(final_image, cv2.COLOR_BGR2RGB)
-        example_image_filename='test' + str(x) + '.jpg'
+        example_image_filename='report/test' + str(x) + '.jpg'
         cv2.imwrite(example_image_filename, final_image)
