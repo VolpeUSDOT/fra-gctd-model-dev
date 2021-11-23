@@ -16,7 +16,7 @@ from fra_gctd_seg_dataset import gctd_dataset
 trainModel = True                               # flag used to toggle model training / saving vs. generating test output
 num_example_images = 50                         # Number of test images to annoate and save for manual inspection
 num_classes = 3                                 # Number of classes in the dataset
-num_epochs = 5                                  # Number of epochs to train the model
+num_epochs = 10                                 # Number of epochs to train the model
 
 # file locations
 dataset_basepath = '/mnt/ml_data/FRA/Phase2/TrainingData/grade_segmentation'

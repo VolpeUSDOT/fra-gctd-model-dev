@@ -152,4 +152,4 @@ if __name__ == '__main__':
         plt.savefig(report_path / 'model-comparison.jpg')
 
         save_labels(labels, label_file)
-        torch.save(model_ft, model_path / Path('saved_model_' + model_name + '.pt'))
+        torch.save(model_ft, model_path / Path('activation_model_' + model_name + '.pt'))
