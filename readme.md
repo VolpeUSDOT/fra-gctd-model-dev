@@ -10,11 +10,7 @@ This repository is home to the python scripts used to modify and fine-tune the p
 
 - Python 3.x (Tested on 3.7.x)
 - Tensorflow 1.15.x (Phase One)
-- PyTorch 1.5.x (Phase Two)
-
-## Installation
-
-Installation instructions are coming soon...
+- PyTorch >=1.5.x (Phase Two)
 
 ## License
 
