@@ -28,17 +28,17 @@ from __future__ import print_function
 
 import os
 import sys
-import tarfile
 
 import numpy as np
 from six.moves import cPickle
-from six.moves import urllib
 import tensorflow as tf
 
 from datasets import dataset_utils
 
 # The URL where the CIFAR data can be downloaded.
 _DATA_URL = 'https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
+# Keras datasets/cifar10.py at 9bcdbc786a8948cce506b9c5fcef2ce33e6efd07.
+_DATA_SHA256 = '6d958be074577803d12ecdefd02955f39262c83c16fe9348329d7fe0b5c001ce'
 
 # The number of training files.
 _NUM_TRAIN_FILES = 5
@@ -121,37 +121,12 @@ def _get_output_filename(dataset_dir, split_name):
   return '%s/cifar10_%s.tfrecord' % (dataset_dir, split_name)
 
 
-def _download_and_uncompress_dataset(dataset_dir):
-  """Downloads cifar10 and uncompresses it locally.
-
-  Args:
-    dataset_dir: The directory where the temporary files are stored.
-  """
-  filename = _DATA_URL.split('/')[-1]
-  filepath = os.path.join(dataset_dir, filename)
-
-  if not os.path.exists(filepath):
-    def _progress(count, block_size, total_size):
-      sys.stdout.write('\r>> Downloading %s %.1f%%' % (
-          filename, float(count * block_size) / float(total_size) * 100.0))
-      sys.stdout.flush()
-    filepath, _ = urllib.request.urlretrieve(_DATA_URL, filepath, _progress)
-    print()
-    statinfo = os.stat(filepath)
-    print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
-    tarfile.open(filepath, 'r:gz').extractall(dataset_dir)
-
-
 def _clean_up_temporary_files(dataset_dir):
   """Removes temporary files used to create the dataset.
 
   Args:
     dataset_dir: The directory where the temporary files are stored.
   """
-  filename = _DATA_URL.split('/')[-1]
-  filepath = os.path.join(dataset_dir, filename)
-  tf.gfile.Remove(filepath)
-
   tmp_dir = os.path.join(dataset_dir, 'cifar-10-batches-py')
   tf.gfile.DeleteRecursively(tmp_dir)
 
@@ -172,7 +147,8 @@ def run(dataset_dir):
     print('Dataset files already exist. Exiting without re-creating them.')
     return
 
-  dataset_utils.download_and_uncompress_tarball(_DATA_URL, dataset_dir)
+  dataset_utils.download_and_uncompress_tarball(
+      _DATA_URL, dataset_dir, _DATA_SHA256, 'cifar-10-batches-py')
 
   # First, process the training data:
   with tf.python_io.TFRecordWriter(training_filename) as tfrecord_writer:

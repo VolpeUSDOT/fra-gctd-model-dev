@@ -37,7 +37,10 @@ import tensorflow as tf
 from datasets import dataset_utils
 
 # The URL where the Flowers data can be downloaded.
-_DATA_URL = 'http://download.tensorflow.org/example_images/flower_photos.tgz'
+_DATA_URL = ('https://storage.googleapis.com/download.tensorflow.org/'
+             'example_images/flower_photos.tgz')
+# TensorFlow Datasets tf_flowers/checksums.tsv at e65dc78511d1e551e382928e0f54836cd219172f.
+_DATA_SHA256 = '4c54ace7911aaffe13a365c34f650e71dd5bf1be0a58b464e5a7183e3e595d9c'
 
 # The number of images in the validation set.
 _NUM_VALIDATION = 350
@@ -156,10 +159,6 @@ def _clean_up_temporary_files(dataset_dir):
   Args:
     dataset_dir: The directory where the temporary files are stored.
   """
-  filename = _DATA_URL.split('/')[-1]
-  filepath = os.path.join(dataset_dir, filename)
-  tf.gfile.Remove(filepath)
-
   tmp_dir = os.path.join(dataset_dir, 'flower_photos')
   tf.gfile.DeleteRecursively(tmp_dir)
 
@@ -187,7 +186,8 @@ def run(dataset_dir):
     print('Dataset files already exist. Exiting without re-creating them.')
     return
 
-  dataset_utils.download_and_uncompress_tarball(_DATA_URL, dataset_dir)
+  dataset_utils.download_and_uncompress_tarball(
+      _DATA_URL, dataset_dir, _DATA_SHA256, 'flower_photos')
   photo_filenames, class_names = _get_filenames_and_classes(dataset_dir)
   class_names_to_ids = dict(zip(class_names, range(len(class_names))))
 
